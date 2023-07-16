@@ -48,11 +48,6 @@ class RMTrainer(Trainer):
                 self.accuracy = []
         return (loss, logits, None)
 
-def compute_metrics(pred):
-    labels = pred.label_ids
-    preds = pred.predictions.argmax(-1)
-    return {"accuracy": (preds == labels).float().mean().item()}
-
 @hydra.main(version_base=None, config_path="config", config_name="config")
 def train(cfg: DictConfig) -> None:
     if not os.path.exists(cfg.log_dir):
@@ -89,7 +84,6 @@ def train(cfg: DictConfig) -> None:
         train_dataset=train_dataset,
         eval_dataset=validation_dataset,
         data_collator=collator_fn,
-        compute_metrics=compute_metrics,
     )
 
     # training
