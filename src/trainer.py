@@ -13,11 +13,16 @@ from loss import RMLoss
 from model import GPTNeoXRM
 from utils import get_tokenizer, prepare_datasets
 
+import time
+import numpy as np
+
 
 class RMTrainer(Trainer):
-    def __init__(self, **kwargs):
+    def __init__(self, test_set_size, **kwargs):
         super().__init__(**kwargs)
         self.loss = RMLoss(reduction="mean")
+        self.test_set_size = test_set_size
+        self.accuracy = []
 
     def compute_loss(self, model, inputs, return_outputs=False):
         k_lens = inputs.pop("k_lens")
@@ -34,9 +39,19 @@ class RMTrainer(Trainer):
     ):
         with torch.no_grad():
             loss, logits = self.compute_loss(model, inputs, return_outputs=True)
-
+            # check if the logits in the even positions are greater than the logits in the odd positions
+            
+            accuracy = (logits[::2] > logits[1::2]).float().mean().item()
+            self.accuracy.append(accuracy)
+            if len(self.accuracy) >= self.test_set_size:
+                print(f"Accuracy: {np.mean(self.accuracy)}")
+                self.accuracy = []
         return (loss, logits, None)
 
+def compute_metrics(pred):
+    labels = pred.label_ids
+    preds = pred.predictions.argmax(-1)
+    return {"accuracy": (preds == labels).float().mean().item()}
 
 @hydra.main(version_base=None, config_path="config", config_name="config")
 def train(cfg: DictConfig) -> None:
@@ -56,6 +71,7 @@ def train(cfg: DictConfig) -> None:
             config=cfg,
         )
 
+    train_dataset, validation_dataset = prepare_datasets(config=cfg)
     model = GPTNeoXRM.from_pretrained(cfg.model)
     tokenizer = get_tokenizer(cfg)
 
@@ -63,15 +79,17 @@ def train(cfg: DictConfig) -> None:
         cfg.trainer, report_to="wandb" if cfg.log_wandb else None
     )
 
-    train_dataset, validation_dataset = prepare_datasets(config=cfg)
+    
     collator_fn = RMDataCollator(tokenizer=tokenizer, max_length=cfg.max_length)
     # Initialize our Trainer
     trainer = RMTrainer(
+        test_set_size=len(validation_dataset),
         model=model,
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=validation_dataset,
         data_collator=collator_fn,
+        compute_metrics=compute_metrics,
     )
 
     # training

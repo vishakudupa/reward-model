@@ -5,6 +5,8 @@ from typing import List, Union
 from datasets import load_dataset
 from omegaconf import OmegaConf
 from torch.utils.data import Dataset
+import pandas as pd
+import json
 
 
 class HFSummary(Dataset):
@@ -52,6 +54,39 @@ class HFSummary(Dataset):
         summaries = list(summaries.keys())
         return [post], summaries
 
+class KaggleDataset:
+    name = "custom/kaggle"
+
+    def __init__(self, is_val=False):
+        super().__init__()
+        if not is_val:
+            self.df = pd.read_json('train.json')
+        else:
+            self.df = pd.read_json('test.json')
+        # indices where label is 1
+        self.indices_1 = self.df[self.df['label'] == 1].index.tolist()
+        # indices where label is 0
+        self.indices_0 = self.df[self.df['label'] == 0].index.tolist()
+
+        # print number of samples in each class
+        print('Number of samples in class 1:', len(self.indices_1))
+        print('Number of samples in class 0:', len(self.indices_0))
+
+        # create pairs of indices
+        self.indices_pairs = []
+        for i in range(len(self.indices_1)):
+            for j in range(len(self.indices_0)):
+                self.indices_pairs.append((self.indices_1[i], self.indices_0[j]))
+
+        # print number of pairs
+        print('Number of pairs:', len(self.indices_pairs))
+
+    def __len__(self):
+        return len(self.indices_pairs)
+
+    def __getitem__(self, idx):
+        # returns tuple of two resumes from df
+        return self.df.iloc[self.indices_pairs[idx][0]]['resume'], self.df.iloc[self.indices_pairs[idx][1]]['resume']
 
 class WebGPT:
     name = "openai/webgpt_comparisons"

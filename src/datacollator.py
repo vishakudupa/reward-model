@@ -30,22 +30,17 @@ class RMDataCollator:
     def process_example(self, example):
         trunc_len = 0
         eos = self.tokenizer.eos_token
-        prefix, outputs = example
-        prefix = self.format_prefix(prefix, eos)
+        outputs = example
         outputs = [self.format_suffix(output, eos) for output in outputs]
-        print(prefix, outputs)
-        prefix_tokens = self.tokenizer.encode(prefix)
         input_ids, attention_masks = [], []
         for output in outputs:
             out_tokens = self.tokenizer.encode(
                 output,
             )
-            if len(prefix_tokens) + len(out_tokens) > self.max_length:
+            if len(out_tokens) > self.max_length:
                 trunc_len = max(
-                    0, len(prefix_tokens) + len(out_tokens) - self.max_length
+                    0, len(out_tokens) - self.max_length
                 )
-            prefix_tokens = prefix_tokens[trunc_len:]
-            out_tokens = prefix_tokens + out_tokens
             out_tokens = out_tokens[: self.max_length]
             pad_len = self.max_length - len(out_tokens)
             attn_masks = [1] * len(out_tokens) + [0] * pad_len
